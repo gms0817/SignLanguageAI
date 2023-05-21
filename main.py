@@ -296,7 +296,8 @@ class VideoRecognition(ttk.Frame):
 
         # Label to house image frames from live feed
         self.place_holder_img = Image.open('res/images/placeholder.jpg')
-        self.place_holder_img = self.place_holder_img.resize((window_width - 300, window_height - 300), Image.Resampling.LANCZOS)
+        self.place_holder_img = self.place_holder_img.resize((window_width - 300, window_height - 300),
+                                                             Image.Resampling.LANCZOS)
         self.place_holder_img = ImageTk.PhotoImage(self.place_holder_img)
 
         self.feed_label = tk.Label(self, image=self.place_holder_img)
@@ -436,6 +437,10 @@ class SignLanguageRecognition:
     def predict(self, input_image):
         # Detect hands in image/frame
         detected_hands = self.detect_hands(input_image)
+
+        # Detect face and draw box
+        face_mesh = slr.detect_face(input_image)
+        slr.draw_face_mesh(input_image, None, face_mesh)
 
         # Make prediction
         landmark_list = self.draw_and_predict_hands(input_image, None, detected_hands)
@@ -639,22 +644,25 @@ class SignLanguageRecognition:
                                            landmark_drawing_spec=None,
                                            connection_drawing_spec=self.mpDrawingStyles.get_default_face_mesh_tesselation_style())
 
-                self.mpDraw.draw_landmarks(image=detection_layer,
-                                           landmark_list=face_landmarks,
-                                           connections=self.mpFaceMesh.FACEMESH_TESSELATION,
-                                           landmark_drawing_spec=None,
-                                           connection_drawing_spec=self.mpDrawingStyles.get_default_face_mesh_tesselation_style())
-
                 # Draw contours
                 self.mpDraw.draw_landmarks(image=live_layer, landmark_list=face_landmarks,
                                            connections=self.mpFaceMesh.FACEMESH_CONTOURS,
                                            landmark_drawing_spec=None,
                                            connection_drawing_spec=self.mpDrawingStyles.get_default_face_mesh_contours_style())
 
-                self.mpDraw.draw_landmarks(image=detection_layer, landmark_list=face_landmarks,
-                                           connections=self.mpFaceMesh.FACEMESH_CONTOURS,
-                                           landmark_drawing_spec=None,
-                                           connection_drawing_spec=self.mpDrawingStyles.get_default_face_mesh_contours_style())
+                if detection_layer is not None:
+                    # Draw tessellations
+
+                    self.mpDraw.draw_landmarks(image=detection_layer,
+                                               landmark_list=face_landmarks,
+                                               connections=self.mpFaceMesh.FACEMESH_TESSELATION,
+                                               landmark_drawing_spec=None,
+                                               connection_drawing_spec=self.mpDrawingStyles.get_default_face_mesh_tesselation_style())
+                    # Draw contours
+                    self.mpDraw.draw_landmarks(image=detection_layer, landmark_list=face_landmarks,
+                                               connections=self.mpFaceMesh.FACEMESH_CONTOURS,
+                                               landmark_drawing_spec=None,
+                                               connection_drawing_spec=self.mpDrawingStyles.get_default_face_mesh_contours_style())
 
 
 if __name__ == '__main__':
