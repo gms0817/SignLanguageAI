@@ -90,9 +90,13 @@ class HomePage(ttk.Frame):
 class RealTimeRecognition(ttk.Frame):
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
+        self.controller = controller
+
+        # Load in icon(s)
+        self.home_icon = tk.PhotoImage(file='res/images/home.png').subsample(15, 15)
 
         # Open video stream
-        self.video_feed = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+        self.video_feed = None
 
         # Label to house image frames from live feed
         self.feed_label = tk.Label(self)
@@ -102,7 +106,17 @@ class RealTimeRecognition(ttk.Frame):
         instruction_label = ttk.Label(self, text='Q: Quit - C: Capture Hand Landmarks')
         instruction_label.pack()
 
+        # Home button
+        home_button = ttk.Button(self, image=self.home_icon, width=10, command=self.go_home)
+        home_button.place(x=30, y=15)
+
+        # Bind video feed thread
         self.bind('<<ShowFrame>>', self.start_realtime_thread)
+
+    def go_home(self):
+        self.video_feed.release()
+        print('Realtime Recognition Stopped.')
+        self.controller.show_frame(HomePage)
 
     def start_realtime_thread(self, args):
         realtime_thread = threading.Thread(target=self.run_realtime_recognition)
@@ -115,6 +129,9 @@ class RealTimeRecognition(ttk.Frame):
             self.run_realtime_recognition()
 
     def run_realtime_recognition(self):
+        # Start video feed
+        self.video_feed = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+
         language_type = slr.language_type
         if language_type == 'ASL':
             class_num = len(slr.asl_recognizer_labels)
@@ -184,6 +201,13 @@ class RealTimeRecognition(ttk.Frame):
 class PhotoRecognition(ttk.Frame):
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
+        self.controller = controller
+        self.INITIAL_TEXT = "<<Select an image to upload>>"
+
+        # Home button
+        self.home_icon = tk.PhotoImage(file='res/images/home.png').subsample(15, 15)
+        home_button = ttk.Button(self, image=self.home_icon, width=10, command=self.go_home)
+        home_button.place(x=30, y=15)
 
         # Image frame
         self.file_path = None
@@ -195,7 +219,7 @@ class PhotoRecognition(ttk.Frame):
         self.image_label.pack(padx=10, pady=(100, 20))
 
         # Prediction Label
-        self.prediction_label = ttk.Label(self, text="<<Select an image to upload>>", font=('Arial', 16))
+        self.prediction_label = ttk.Label(self, text=self.INITIAL_TEXT, font=('Arial', 16))
         self.prediction_label.pack(side="top", padx=10, pady=10)
 
         # Select a photo
@@ -204,6 +228,18 @@ class PhotoRecognition(ttk.Frame):
 
         self.submit_btn = ttk.Button(self, text="Submit", command=self.classify_image)
         self.submit_btn.pack(ipadx=40, ipady=20, padx=10, pady=10)
+
+    def go_home(self):
+        # Reset image and labels
+        self.image = Image.open('res/images/placeholder.jpg')
+        self.image = self.image.resize((400, 400), Image.Resampling.LANCZOS)
+        self.image = ImageTk.PhotoImage(self.image)
+        self.image_label.config(image=self.image)
+
+        self.prediction_label.config(text=self.INITIAL_TEXT)
+
+        # go back to home screen
+        self.controller.show_frame(HomePage)
 
     def load_image(self):
         # File chooser
@@ -222,30 +258,146 @@ class PhotoRecognition(ttk.Frame):
 
             # Load the image file
             im = Image.open(self.file_path)
+
+            im = im.resize((400, 400), Image.Resampling.LANCZOS)
+            self.image = ImageTk.PhotoImage(im)
+
+            # Update image display
+            self.image_label.config(image=self.image)
+
+            # Update prediction label text
+            self.prediction_label.config(text=self.file_path[self.file_path.rindex('/') + 1:])
         except AttributeError:
-            pass  # Ignore when file is not selected - e.g. cancel popup window
-
-        im = im.resize((400, 400), Image.Resampling.LANCZOS)
-        self.image = ImageTk.PhotoImage(im)
-
-        # Update image display
-        self.image_label.config(image=self.image)
-
-        # Update prediction label text
-        self.prediction_label.config(text=self.file_path[self.file_path.rindex('/') + 1:])
+            if self.file_path == '':
+                self.file_path = None  # Ignore when file is not selected - e.g. cancel popup window
 
     def classify_image(self):
-        # Make prediction
-        temp_im = cv2.imread(self.file_path)
-        prediction = slr.predict(temp_im)
+        if self.file_path is not None:
+            # Make prediction
+            temp_im = cv2.imread(self.file_path)
+            prediction = slr.predict(temp_im)
 
-        # Update label
-        self.prediction_label.config(text=prediction)
+            # Prep landmark image
+            new_im = cv2.cvtColor(temp_im, cv2.COLOR_BGR2RGB)
+            new_im = Image.fromarray(new_im)
+            new_im = new_im.resize((400, 400), Image.Resampling.LANCZOS)
+
+            # Update image and label
+            self.image = ImageTk.PhotoImage(new_im)
+            self.image_label.config(image=self.image)
+            self.prediction_label.config(text=prediction)
 
 
 class VideoRecognition(ttk.Frame):
     def __init__(self, parent, controller):
         ttk.Frame.__init__(self, parent)
+        self.video_feed = None
+        self.controller = controller
+
+        # Label to house image frames from live feed
+        self.place_holder_img = Image.open('res/images/placeholder.jpg')
+        self.place_holder_img = self.place_holder_img.resize((window_width - 300, window_height - 300), Image.Resampling.LANCZOS)
+        self.place_holder_img = ImageTk.PhotoImage(self.place_holder_img)
+
+        self.feed_label = tk.Label(self, image=self.place_holder_img)
+        self.feed_label.pack(expand=True, fill='both')
+
+        # Instruction label
+        instruction_label = ttk.Label(self, text='Q: Quit')
+        instruction_label.pack()
+
+        # Home button
+        self.home_icon = tk.PhotoImage(file='res/images/home.png').subsample(15, 15)
+        home_button = ttk.Button(self, image=self.home_icon, width=10, command=self.go_home)
+        home_button.place(x=30, y=15)
+
+        # Select a video
+        self.file_path = None
+        self.browse_btn = ttk.Button(self, text="Browse", command=self.load_video)
+        self.browse_btn.pack(ipadx=40, ipady=20, padx=10, pady=10)
+
+        # Process the video
+        self.process_video_btn = ttk.Button(self, text="Process Video", command=self.start_video_thread)
+        self.process_video_btn.pack(ipadx=40, ipady=20, padx=10, pady=10)
+
+    def go_home(self):
+        # Reset page to default state
+        self.file_path = None
+        self.video_feed.release()
+        self.feed_label.configure(image=self.place_holder_img)
+        self.feed_label.image = self.place_holder_img
+
+        # Go back to home page
+        self.controller.show_frame(HomePage)
+
+    def start_video_thread(self):
+        video_thread = threading.Thread(target=self.process_video)
+        video_thread.isDaemon()
+
+        try:
+            video_thread.start()
+        except RuntimeError:
+            self.process_video()
+
+    def load_video(self):
+        # File chooser
+        filetypes = (
+            ('MP4', '*.mp4'),
+            ('MOV', '*.mov')
+        )
+
+        try:
+            self.file_path = filedialog.askopenfilename(
+                title="Select an image of Sign Language",
+                initialdir='./',
+                filetypes=filetypes
+            )
+
+        except AttributeError:
+            if self.file_path == '':
+                self.file_path = None  # Ignore when file is not selected - e.g. cancel popup window
+
+    def process_video(self):
+        # Load the video file
+        self.video_feed = cv2.VideoCapture(self.file_path)
+
+        prediction = ''
+        while self.video_feed.isOpened():
+            # Capture video frame-by-frame
+            ret, video_frame = self.video_feed.read()
+
+            # Resize video_frame
+            if ret:
+                video_frame = imutils.resize(video_frame, width=window_width - 50, height=window_height - 50)
+
+                # Flip frame
+                video_frame = cv2.flip(video_frame, 1)
+
+                # Make prediction and draw landmarks if hand is detected
+                previous_prediction = prediction
+                prediction = slr.predict(video_frame)
+
+                if prediction != previous_prediction and prediction != 'Unsure':
+                    print(prediction, end=" ")
+
+                if keyboard.is_pressed('q'):
+                    app.quit()
+                    break
+                else:
+                    cv2.waitKey(1)
+
+                # Display image frame
+                display_image = cv2.cvtColor(video_frame, cv2.COLOR_BGR2RGB)  # Fix color prior to displaying
+                display_image = Image.fromarray(display_image)
+                display_image = ImageTk.PhotoImage(image=display_image)
+
+                # Update image display
+                self.feed_label.configure(image=display_image)
+                self.feed_label.image = display_image
+            else:
+                # Return to default image
+                self.feed_label.configure(image=self.place_holder_img)
+                self.feed_label.image = self.place_holder_img
 
 
 class SignLanguageRecognition:
@@ -283,7 +435,6 @@ class SignLanguageRecognition:
 
     def predict(self, input_image):
         # Detect hands in image/frame
-
         detected_hands = self.detect_hands(input_image)
 
         # Make prediction
@@ -301,9 +452,10 @@ class SignLanguageRecognition:
             else:
                 hand_sign_label = 'Unsure'
         except Exception as e:
-            hand_sign_label = 'Error. No label(s) found.'
-            print(f'Error: {e}')
+            hand_sign_label = 'Unsure'
+            pass
         return hand_sign_label
+
     def load_labels(self, language):
         label_list = []
 
