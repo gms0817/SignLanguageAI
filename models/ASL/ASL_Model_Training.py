@@ -10,7 +10,7 @@ dataset = 'ASL_landmarks.csv'
 model_output_path = 'ASL_Recognizer.hdf5'
 
 # Define constants
-NUM_CLASSES = 5
+NUM_CLASSES = 24
 RANDOM_SEED = 10
 
 # Load the data

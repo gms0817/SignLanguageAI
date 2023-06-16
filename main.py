@@ -173,9 +173,10 @@ class RealTimeRecognition(ttk.Frame):
                 pass
             elif keyboard.is_pressed('c') and landmark_list is not None:
                 if current_num_entries == MAX_ENTRIES:
-                    class_num += 1
                     slr.export_hand_landmarks(class_num, current_num_entries, MAX_ENTRIES, language_type, landmark_list)
                     current_num_entries = 1
+
+                    class_num += 1
 
                 else:
                     current_num_entries += 1
@@ -407,7 +408,7 @@ class SignLanguageRecognition:
         self.language_type = 'ASL'
 
         # Load classification models and labels
-        self.MINIMUM_PREDICTION_CONFIDENCE = 0.60
+        self.MINIMUM_PREDICTION_CONFIDENCE = 0.10
 
         self.asl_recognizer = ASLRecognizer()
         self.asl_recognizer_labels = self.load_labels(self.language_type)
