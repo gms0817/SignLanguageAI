@@ -10,7 +10,8 @@ import tkinter as tk
 import keyboard
 from tkinter import ttk, filedialog
 from PIL import Image, ImageTk
-from ASL_Recognizer import ASLRecognizer
+from models.ASL.ASL_Recognizer import ASLRecognizer
+from models.BSL.BSL_Recognizer import BSLRecognizer
 
 
 class MainApp(tk.Tk):
@@ -26,9 +27,22 @@ class MainApp(tk.Tk):
         # Configure frames from classes
         self.frames = {}
 
+        def set_language(binding_event):
+            slr.language_type = language_selection_dropdown.get()
+            print(f'Debug: Language Type: {slr.language_type}')
+
+        # Configure dropdown for language choice
+        language_selection_dropdown = ttk.Combobox(
+            state='readonly',
+            values=['ASL', 'BSL'],
+        )
+        language_selection_dropdown.place(x=window_width - 200, y=20)
+        language_selection_dropdown.current(0)
+
+        # Bind language select
+        language_selection_dropdown.bind('<<ComboboxSelected>>', set_language)
         for F in (HomePage, RealTimeRecognition, PhotoRecognition, VideoRecognition):
             frame = F(container, self)
-
             self.frames[F] = frame
             frame.grid(row=0, column=0, sticky="nsew")
 
@@ -134,10 +148,13 @@ class RealTimeRecognition(ttk.Frame):
 
         language_type = slr.language_type
         if language_type == 'ASL':
-            class_num = len(slr.asl_recognizer_labels)
+            # class_num = len(slr.asl_recognizer_labels)
+            class_num = 15
+        elif language_type == 'BSL':
+            class_num = len(slr.bsl_recognizer_labels)
 
         current_num_entries = 0
-        MAX_ENTRIES = 30
+        MAX_ENTRIES = 50
 
         while self.video_feed.isOpened():
             # Capture frame-by-frame
@@ -403,6 +420,7 @@ class VideoRecognition(ttk.Frame):
 
 
 class SignLanguageRecognition:
+
     def __init__(self):
         # Default Language type - global scope
         self.language_type = 'ASL'
@@ -410,9 +428,16 @@ class SignLanguageRecognition:
         # Load classification models and labels
         self.MINIMUM_PREDICTION_CONFIDENCE = 0.10
 
-        self.asl_recognizer = ASLRecognizer()
-        self.asl_recognizer_labels = self.load_labels(self.language_type)
-
+        try:
+            self.asl_recognizer = ASLRecognizer()
+        except ValueError as e:
+            print(f'Error: {e}')
+        try:
+            self.bsl_recognizer = BSLRecognizer()
+        except ValueError as e:
+            print(f'Error: {e}')
+        self.asl_recognizer_labels = self.load_labels('ASL')
+        self.bsl_recognizer_labels = self.load_labels('BSL')
         # Configure mediapipe hands solution
         self.mpHands = mp.solutions.hands
         self.hands = self.mpHands.Hands(
@@ -450,11 +475,16 @@ class SignLanguageRecognition:
         try:
             if self.language_type == 'ASL':
                 prediction = self.asl_recognizer(landmark_list)
+            elif self.language_type == 'BSL':
+                prediction = self.bsl_recognizer(landmark_list)
             prediction_confidence = float(prediction[0])
 
             if prediction_confidence > self.MINIMUM_PREDICTION_CONFIDENCE:
                 hand_sign_num = prediction[1]
-                hand_sign_label = self.asl_recognizer_labels[hand_sign_num]
+                if self.language_type == 'ASL':
+                    hand_sign_label = self.asl_recognizer_labels[hand_sign_num]
+                elif self.language_type == 'BSL':
+                    hand_sign_label = self.bsl_recognizer_labels[hand_sign_num]
             else:
                 hand_sign_label = 'Unsure'
         except Exception as e:
@@ -570,11 +600,16 @@ class SignLanguageRecognition:
                     try:
                         if self.language_type == 'ASL':
                             prediction = self.asl_recognizer(landmark_list)
+                        elif self.language_type == 'BSL':
+                            prediction = self.bsl_recognizer(landmark_list)
                         prediction_confidence = float(prediction[0])
 
                         if prediction_confidence > self.MINIMUM_PREDICTION_CONFIDENCE:
                             hand_sign_num = prediction[1]
-                            hand_sign_label = self.asl_recognizer_labels[hand_sign_num]
+                            if self.language_type == 'ASL':
+                                hand_sign_label = self.asl_recognizer_labels[hand_sign_num]
+                            elif self.language_type == 'BSL':
+                                hand_sign_label = self.bsl_recognizer_labels[hand_sign_num]
                         else:
                             hand_sign_label = 'Unsure'
                     except Exception as e:
@@ -592,7 +627,7 @@ class SignLanguageRecognition:
                         self.mpDraw.draw_landmarks(detection_layer, hand_landmarks, self.mpHands.HAND_CONNECTIONS)
 
                     # Draw bounding box
-                    box_info_text = f'{handType} - Conf: {prediction_confidence}% - Sign: {hand_sign_label}'
+                    box_info_text = f'{self.language_type} | {handType} | Conf: {prediction_confidence}% | Sign:{hand_sign_label}'
                     self.draw_bounding_box(input_image, hand_landmarks, box_info_text)
 
             return landmark_list

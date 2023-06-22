@@ -6,8 +6,8 @@ import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
 # Configure paths
-dataset = 'ASL_landmarks.csv'
-model_output_path = 'ASL_Recognizer.hdf5'
+dataset = 'BSL_landmarks.csv'
+model_output_path = 'BSL_Recognizer.hdf5'
 
 # Define constants
 NUM_CLASSES = 24
@@ -18,7 +18,7 @@ x_dataset = np.loadtxt(dataset, delimiter=',', dtype='float32', usecols=list(ran
 y_dataset = np.loadtxt(dataset, delimiter=',', dtype='int32', usecols=0)  # class_num columns
 
 # Train test split
-x_train, x_test, y_train, y_test = train_test_split(x_dataset, y_dataset, train_size=0.80, random_state=RANDOM_SEED)
+x_train, x_test, y_train, y_test = train_test_split(x_dataset, y_dataset, train_size=0.75, random_state=RANDOM_SEED)
 
 # Setup model architecture
 model = tf.keras.models.Sequential([
@@ -67,10 +67,10 @@ tf_converter = tf.lite.TFLiteConverter.from_keras_model(model)
 tf_converter.optimizations = [tf.lite.Optimize.DEFAULT]
 tflite_model = tf_converter.convert()
 
-open('ASL_Recognizer.tflite', 'wb').write(tflite_model)
+open('BSL_Recognizer.tflite', 'wb').write(tflite_model)
 
 # Configure interpreter
-interpreter = tf.lite.Interpreter(model_path='ASL_Recognizer.tflite')
+interpreter = tf.lite.Interpreter(model_path='BSL_Recognizer.tflite')
 interpreter.allocate_tensors()
 
 input_details = interpreter.get_input_details()
