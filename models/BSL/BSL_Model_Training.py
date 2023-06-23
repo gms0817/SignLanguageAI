@@ -10,7 +10,7 @@ dataset = 'BSL_landmarks.csv'
 model_output_path = 'BSL_Recognizer.hdf5'
 
 # Define constants
-NUM_CLASSES = 24
+NUM_CLASSES = 2
 RANDOM_SEED = 10
 
 # Load the data
