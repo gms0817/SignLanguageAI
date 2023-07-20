@@ -10,7 +10,7 @@ dataset = 'ASL_landmarks.csv'
 model_output_path = 'ASL_Recognizer.hdf5'
 
 # Define constants
-NUM_CLASSES = 5
+NUM_CLASSES = 24
 RANDOM_SEED = 10
 
 # Load the data
@@ -18,7 +18,7 @@ x_dataset = np.loadtxt(dataset, delimiter=',', dtype='float32', usecols=list(ran
 y_dataset = np.loadtxt(dataset, delimiter=',', dtype='int32', usecols=0)  # class_num columns
 
 # Train test split
-x_train, x_test, y_train, y_test = train_test_split(x_dataset, y_dataset, train_size=0.75, random_state=RANDOM_SEED)
+x_train, x_test, y_train, y_test = train_test_split(x_dataset, y_dataset, train_size=0.80, random_state=RANDOM_SEED)
 
 # Setup model architecture
 model = tf.keras.models.Sequential([
