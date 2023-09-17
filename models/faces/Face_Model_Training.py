@@ -1,18 +1,21 @@
+import csv
+import os
 
 import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import train_test_split
 
 # Configure paths
-dataset = 'BSL_landmarks.csv'
-model_output_path = 'BSL_Recognizer.hdf5'
+dataset = 'face_landmarks.csv'
+model_output_path = 'Face_Recognizer.hdf5'
 
 # Define constants
-NUM_CLASSES = 2
+NUM_CLASSES = 3
 RANDOM_SEED = 10
+NUM_LANDMARKS = 468
 
 # Load the data
-x_dataset = np.loadtxt(dataset, delimiter=',', dtype='float32', usecols=list(range(1, (21 * 2) + 1)))
+x_dataset = np.loadtxt(dataset, delimiter=',', dtype='float32', usecols=list(range(1, (NUM_LANDMARKS * 2) + 1)))
 y_dataset = np.loadtxt(dataset, delimiter=',', dtype='int32', usecols=0)  # class_num columns
 
 # Train test split
@@ -20,7 +23,7 @@ x_train, x_test, y_train, y_test = train_test_split(x_dataset, y_dataset, train_
 
 # Setup model architecture
 model = tf.keras.models.Sequential([
-    tf.keras.layers.InputLayer((21 * 2, )),
+    tf.keras.layers.InputLayer((NUM_LANDMARKS * 2, )),
     tf.keras.layers.Dropout(0.2),
     tf.keras.layers.Dense(20, activation='relu'),
     tf.keras.layers.Dropout(0.4),
@@ -65,10 +68,10 @@ tf_converter = tf.lite.TFLiteConverter.from_keras_model(model)
 tf_converter.optimizations = [tf.lite.Optimize.DEFAULT]
 tflite_model = tf_converter.convert()
 
-open('BSL_Recognizer.tflite', 'wb').write(tflite_model)
+open('Face_Recognizer.tflite', 'wb').write(tflite_model)
 
 # Configure interpreter
-interpreter = tf.lite.Interpreter(model_path='BSL_Recognizer.tflite')
+interpreter = tf.lite.Interpreter(model_path='Face_Recognizer.tflite')
 interpreter.allocate_tensors()
 
 input_details = interpreter.get_input_details()

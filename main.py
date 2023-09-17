@@ -12,6 +12,7 @@ from tkinter import ttk, filedialog
 from PIL import Image, ImageTk
 from models.ASL.ASL_Recognizer import ASLRecognizer
 from models.BSL.BSL_Recognizer import BSLRecognizer
+from models.faces.Face_Recognizer import FaceRecognizer
 
 
 class MainApp(tk.Tk):
@@ -117,7 +118,7 @@ class RealTimeRecognition(ttk.Frame):
         self.feed_label.pack(expand=True, fill='both')
 
         # Instruction label
-        instruction_label = ttk.Label(self, text='Q: Quit - C: Capture Hand Landmarks')
+        instruction_label = ttk.Label(self, text='Q: Quit - C: Capture Hand Landmarks - F: Capture Face Landmarks')
         instruction_label.pack()
 
         # Home button
@@ -147,13 +148,13 @@ class RealTimeRecognition(ttk.Frame):
         self.video_feed = cv2.VideoCapture(0, cv2.CAP_DSHOW)
 
         if slr.language_type == 'ASL':
-            class_num = len(slr.asl_recognizer_labels)
+            class_num = len(slr.asl_recognizer_labels) - 1
         elif slr.language_type == 'BSL':
-            class_num = 1
-            # class_num = len(slr.bsl_recognizer_labels)
+            class_num = len(slr.bsl_recognizer_labels) - 1
+        face_class_num = len(slr.face_recognizer_labels) - 1
 
-        current_num_entries = 0
-        MAX_ENTRIES = 50
+        current_num_entries, face_current_num_entries = 0, 0
+        MAX_ENTRIES, FACE_MAX_ENTRIES = 50, 50
 
         while self.video_feed.isOpened():
             # Capture frame-by-frame
@@ -174,8 +175,12 @@ class RealTimeRecognition(ttk.Frame):
 
             # Detect face and draw box
             face_mesh = slr.detect_face(live_layer)
-            slr.draw_face_mesh(live_layer, detection_layer, face_mesh)
-
+            try:
+                slr.draw_face_mesh_and_predict(live_layer, detection_layer, face_mesh)
+                face_landmark_list = slr.calculate_landmarks_list(live_layer, face_mesh.multi_face_landmarks[0])
+                face_landmark_list = slr.normalize_landmark_list(face_landmark_list)
+            except Exception:
+                pass
             # Display output
             detection_layer = cv2.resize(detection_layer, dsize=(250, 250))  # Shrink for mini overlay
             live_layer[0: 250, 0: 250] = detection_layer
@@ -185,6 +190,16 @@ class RealTimeRecognition(ttk.Frame):
                 self.video_feed.release()
                 app.quit()
                 break
+            elif keyboard.is_pressed('f') and face_landmark_list is not None:
+                if face_current_num_entries == FACE_MAX_ENTRIES:
+                    slr.export_face_landmarks(face_class_num, face_current_num_entries, FACE_MAX_ENTRIES,
+                                              face_landmark_list)
+                    face_current_num_entries = 1
+                    face_class_num += 1
+                else:
+                    face_current_num_entries += 1
+                    slr.export_face_landmarks(face_class_num, face_current_num_entries, FACE_MAX_ENTRIES,
+                                              face_landmark_list)
             elif keyboard.is_pressed('c') and landmark_list is None:
                 pass
             elif keyboard.is_pressed('c') and landmark_list is not None:
@@ -203,8 +218,8 @@ class RealTimeRecognition(ttk.Frame):
                     # Extract landmarks for each hand
                     try:
                         multi_hand_landmarks = detected_hands.multi_hand_landmarks
-                        left_hand_landmarks = slr.calculate_hand_landmarks_list(detection_layer, multi_hand_landmarks[0])
-                        right_hand_landmarks = slr.calculate_hand_landmarks_list(detection_layer, multi_hand_landmarks[1])
+                        left_hand_landmarks = slr.calculate_landmarks_list(detection_layer, multi_hand_landmarks[0])
+                        right_hand_landmarks = slr.calculate_landmarks_list(detection_layer, multi_hand_landmarks[1])
                     except IndexError as e:
                         print('Number of Hands < 2!')
 
@@ -461,8 +476,13 @@ class SignLanguageRecognition:
             self.bsl_recognizer = BSLRecognizer()
         except ValueError as e:
             print(f'Error: {e}')
+        try:
+            self.face_recognizer = FaceRecognizer()
+        except ValueError as e:
+            print(f'Error: {e}')
         self.asl_recognizer_labels = self.load_labels('ASL')
         self.bsl_recognizer_labels = self.load_labels('BSL')
+        self.face_recognizer_labels = self.load_labels('Face')
 
         # Configure mediapipe hands solution
         self.mpHands = mp.solutions.hands
@@ -480,7 +500,7 @@ class SignLanguageRecognition:
             static_image_mode=False,
             max_num_faces=1,
             min_detection_confidence=0.3,
-            min_tracking_confidence=0.3
+            min_tracking_confidence=0.3,
         )
 
         self.mpHolistic = mp.solutions.holistic
@@ -493,7 +513,7 @@ class SignLanguageRecognition:
 
         # Detect face and draw box
         face_mesh = slr.detect_face(input_image)
-        slr.draw_face_mesh(input_image, None, face_mesh)
+        slr.draw_face_mesh_and_predict(input_image, None, face_mesh)
 
         # Make prediction
         landmark_list = self.draw_and_predict_hands(input_image, None, detected_hands)
@@ -526,6 +546,8 @@ class SignLanguageRecognition:
             filepath = 'models/ASL/ASL_classes.txt'
         elif language == 'BSL':
             filepath = 'models/BSL/BSL_classes.txt'
+        elif language == 'Face':
+            filepath = 'models/faces/Face_classes.txt'
         else:
             return 'Invalid Language Type. Please review code.'
 
@@ -614,7 +636,7 @@ class SignLanguageRecognition:
         if detected_hands.multi_hand_landmarks:
             for hand_landmarks, handedness in zip(detected_hands.multi_hand_landmarks, detected_hands.multi_handedness):
                 # Construct landmark list for each hand
-                landmark_list = self.calculate_hand_landmarks_list(input_image, hand_landmarks)
+                landmark_list = self.calculate_landmarks_list(input_image, hand_landmarks)
                 # Debug Statement: print(landmark_list)
 
                 # Normalize landmark list
@@ -628,8 +650,8 @@ class SignLanguageRecognition:
 
                     # Extract landmarks for each hand
                     multi_hand_landmarks = detected_hands.multi_hand_landmarks
-                    left_hand_landmarks = self.calculate_hand_landmarks_list(input_image, multi_hand_landmarks[0])
-                    right_hand_landmarks = self.calculate_hand_landmarks_list(input_image, multi_hand_landmarks[1])
+                    left_hand_landmarks = self.calculate_landmarks_list(input_image, multi_hand_landmarks[0])
+                    right_hand_landmarks = self.calculate_landmarks_list(input_image, multi_hand_landmarks[1])
 
                     # Normalize each hand's landmarks
                     normalized_left_hand_landmarks = self.normalize_landmark_list(left_hand_landmarks)
@@ -659,8 +681,10 @@ class SignLanguageRecognition:
                     self.mpDraw.draw_landmarks(input_image, multi_hand_landmarks[1], self.mpHands.HAND_CONNECTIONS)
 
                     if detection_layer is not None:
-                        self.mpDraw.draw_landmarks(detection_layer, multi_hand_landmarks[0], self.mpHands.HAND_CONNECTIONS)
-                        self.mpDraw.draw_landmarks(detection_layer, multi_hand_landmarks[1], self.mpHands.HAND_CONNECTIONS)
+                        self.mpDraw.draw_landmarks(detection_layer, multi_hand_landmarks[0],
+                                                   self.mpHands.HAND_CONNECTIONS)
+                        self.mpDraw.draw_landmarks(detection_layer, multi_hand_landmarks[1],
+                                                   self.mpHands.HAND_CONNECTIONS)
 
                     # Draw bounding box
                     box_info_text = f'{self.language_type} | {handType} | Conf: {prediction_confidence}% | Sign:{hand_sign_label}'
@@ -708,7 +732,7 @@ class SignLanguageRecognition:
 
             return landmark_list
 
-    def calculate_hand_landmarks_list(self, live_layer, hand_landmarks):
+    def calculate_landmarks_list(self, live_layer, hand_landmarks):
         image_width, image_height = live_layer.shape[1], live_layer.shape[0]
 
         landmark_point = []
@@ -744,10 +768,9 @@ class SignLanguageRecognition:
 
         return detected_face
 
-    def draw_face_mesh(self, live_layer, detection_layer, face_mesh):
+    def draw_face_mesh_and_predict(self, live_layer, detection_layer, face_mesh):
         # Draw mesh
         if face_mesh.multi_face_landmarks:
-
             for face_landmarks in face_mesh.multi_face_landmarks:
                 # Draw tessellations
                 self.mpDraw.draw_landmarks(image=live_layer,
@@ -775,6 +798,37 @@ class SignLanguageRecognition:
                                                connections=self.mpFaceMesh.FACEMESH_CONTOURS,
                                                landmark_drawing_spec=None,
                                                connection_drawing_spec=self.mpDrawingStyles.get_default_face_mesh_contours_style())
+            # Normalize Landmarks
+            face_landmark_list = slr.calculate_landmarks_list(live_layer, face_mesh.multi_face_landmarks[0])
+            face_landmark_list = slr.normalize_landmark_list(face_landmark_list)
+
+            # Make prediction
+            prediction = self.face_recognizer(face_landmark_list)
+            prediction_confidence = float(prediction[0])
+
+            if prediction_confidence > self.MINIMUM_PREDICTION_CONFIDENCE:
+                face_num = prediction[1]
+                face_label = self.face_recognizer_labels[face_num]
+
+                # Draw bounding box
+                box_info_text = f'Expression: {face_label} | Conf: {prediction_confidence}%'
+                self.draw_bounding_box(live_layer, face_mesh.multi_face_landmarks[0], box_info_text)
+
+    def export_face_landmarks(self, class_num, current_num_entries, max_entries, landmark_list):
+        print(f'Class Number: {class_num} Entries: {current_num_entries}/{max_entries}- Landmark List: {landmark_list}')
+
+        directory_path = f'models/faces'
+        filepath = f'{directory_path}/face_landmarks.csv'
+        directory = os.path.dirname(filepath)
+
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        with open(filepath, 'a', newline="") as file:
+            print(*landmark_list)
+
+            writer = csv.writer(file, delimiter=',')
+            writer.writerow([class_num, *landmark_list])
 
 
 if __name__ == '__main__':
