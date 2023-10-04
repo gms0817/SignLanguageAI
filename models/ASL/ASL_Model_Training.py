@@ -1,8 +1,6 @@
-import csv
-import os
-
 import numpy as np
 import tensorflow as tf
+import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 
 # Configure paths
@@ -47,10 +45,11 @@ model.compile(
 )
 
 # Train the model
-model.fit(
+epochs = 1000
+history = model.fit(
     x_train,
     y_train,
-    epochs=1000,
+    epochs=epochs,
     batch_size=128,
     validation_data=(x_test, y_test),
     callbacks=[checkpoint_callback, early_stopping_callback]
@@ -82,3 +81,28 @@ tflite_results = interpreter.get_tensor(output_details[0]['index'])
 
 print(np.squeeze(tflite_results))
 print(np.argmax(np.squeeze(tflite_results)))
+
+# Plot training results
+print("Calculating the accuracy...")
+acc = history.history['accuracy']
+val_acc = history.history['val_accuracy']
+print("Calculating the loss...")
+loss = history.history['loss']
+val_loss = history.history['val_loss']
+
+# Get early stopped epoch value
+epochs_range = range(early_stopping_callback.stopped_epoch + 1)
+print("The results are being visualized...")
+plt.figure(figsize=(8, 4))
+plt.subplot(1, 2, 1)
+plt.plot(epochs_range, acc, label='Training Accuracy')
+plt.plot(epochs_range, val_acc, label='Validation Accuracy')
+plt.legend(loc='lower right')
+plt.title('Training and Validation Accuracy')
+plt.subplot(1, 2, 2)
+
+plt.plot(epochs_range, loss, label='Training Loss')
+plt.plot(epochs_range, val_loss, label='Validation Loss')
+plt.legend(loc='upper right')
+plt.title('Training and Validation Loss')
+plt.show()
